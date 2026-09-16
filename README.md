@@ -1,6 +1,6 @@
 # YAM (Your Auto Map) 🗺️🏔️
 
-![YAM UI Screenshot](screenshot.jpg) *(Note: Replace `screenshot.jpg` with the actual path/name of your UI image, e.g., `Screenshot 2026-09-16 at 1.33.44 PM.jpg`)*
+ (`Screenshot 2026-09-16 at 1.33.44 PM.jpg`)*
 
 **YAM (Your Auto Map)** is an AI-powered trekking and travel itinerary generator designed for outdoor enthusiasts. Tell YAM where you want to go, and it will dynamically shape a paced, trail-aware itinerary complete with travel logistics, altitude gains, estimated costs (in ₹), and essential gear recommendations.
 
