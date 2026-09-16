@@ -1,0 +1,12 @@
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+
+python-dotenv>=1.0.1
+certifi>=2
+
+langchain>=1.0.0
+langchain-classic>=1.0.0
+langchain-core>=0.3.0
+langchain-nvidia-ai-endpoints>=0.3.0
