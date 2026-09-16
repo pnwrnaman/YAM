@@ -13,99 +13,103 @@ void main() {
 }
 
 // ---------------------------------------------------------------------------
-// App shell & theme
+// Theme
 // ---------------------------------------------------------------------------
+
+class AppColors {
+  static const bg = Color(0xFFF5F6F8);
+  static const primaryDark = Color(0xFF163C2C);
+  static const primary = Color(0xFF1F6D4C);
+  static const primaryLight = Color(0xFFE7F3EC);
+  static const amber = Color(0xFFFF9F45);
+  static const border = Color(0xFFE4E7EC);
+  static const textMuted = Color(0xFF667085);
+  static const textDark = Color(0xFF101828);
+  static const errorBg = Color(0xFFFEEEEE);
+  static const errorBorder = Color(0xFFF5B5B5);
+  static const errorText = Color(0xFFB42318);
+}
+
+BoxDecoration panelDecoration() => BoxDecoration(
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(20),
+  border: Border.all(color: AppColors.border),
+  boxShadow: [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.03),
+      blurRadius: 20,
+      offset: const Offset(0, 8),
+    ),
+  ],
+);
 
 class YamApp extends StatelessWidget {
   const YamApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const backgroundColor = Color(0xFF0E1116);
-    const surfaceColor = Color(0xFF171B22);
-    const accentColor = Color(0xFFFF9F45); // alpine sunrise amber
-    const secondaryAccent = Color(0xFF4FD1C5); // glacier teal
-
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: accentColor,
-      brightness: Brightness.dark,
-      primary: accentColor,
-      secondary: secondaryAccent,
-      surface: surfaceColor,
-    );
-
     return MaterialApp(
       title: 'YAM',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: backgroundColor,
-        colorScheme: colorScheme,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: backgroundColor,
-          elevation: 0,
-          centerTitle: false,
-        ),
-        cardTheme: CardThemeData(
-          color: surfaceColor,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(color: Colors.white.withOpacity(0.06)),
-          ),
+        scaffoldBackgroundColor: AppColors.bg,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.light,
+          primary: AppColors.primary,
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: backgroundColor,
+          fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
+            horizontal: 14,
             vertical: 14,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: accentColor, width: 1.6),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.redAccent),
           ),
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          labelStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: accentColor,
-            foregroundColor: Colors.black,
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            backgroundColor: AppColors.primaryDark,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
             textStyle: const TextStyle(
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
           ),
         ),
-        textTheme: ThemeData.dark().textTheme.apply(
-          bodyColor: Colors.white.withOpacity(0.92),
-          displayColor: Colors.white,
+        textTheme: ThemeData.light().textTheme.apply(
+          bodyColor: AppColors.textDark,
+          displayColor: AppColors.textDark,
         ),
       ),
-      home: const TripDashboard(),
+      home: const HomeShell(),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Data models
+// Data models (unchanged wire format — matches FastAPI backend exactly)
 // ---------------------------------------------------------------------------
 
 class TripRequest {
@@ -200,27 +204,302 @@ class TripItinerary {
 }
 
 // ---------------------------------------------------------------------------
-// Trip dashboard screen
+// Home shell — responsive: side-by-side on wide screens, stacked on phones
 // ---------------------------------------------------------------------------
 
-class TripDashboard extends StatefulWidget {
-  const TripDashboard({super.key});
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
 
   @override
-  State<TripDashboard> createState() => _TripDashboardState();
+  State<HomeShell> createState() => _HomeShellState();
 }
 
-class _TripDashboardState extends State<TripDashboard> {
-  final _formKey = GlobalKey<FormState>();
+class _HomeShellState extends State<HomeShell> {
+  TripItinerary? _itinerary;
+  String _origin = '';
+  String _destination = '';
+  String _difficulty = '';
+  int _durationDays = 0;
+  bool _isLoading = false;
+  String? _error;
 
+  Future<void> _handleGenerate(TripRequest request) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_apiBaseUrl/generate_itinerary'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(request.toJson()),
+          )
+          .timeout(const Duration(seconds: 90));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final itinerary = TripItinerary.fromJson(decoded);
+        setState(() {
+          _itinerary = itinerary;
+          _origin = request.origin;
+          _destination = request.destination;
+          _difficulty = request.trekDifficulty;
+          _durationDays = request.durationDays;
+          _isLoading = false;
+        });
+
+        final isWide = MediaQuery.of(context).size.width >= 900;
+        if (!isWide && mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder:
+                  (_) => ItineraryScreen(
+                    itinerary: itinerary,
+                    origin: _origin,
+                    destination: _destination,
+                    difficulty: _difficulty,
+                    durationDays: _durationDays,
+                  ),
+            ),
+          );
+        }
+      } else {
+        throw Exception(
+          'Server responded with ${response.statusCode}: ${response.body}',
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Failed to plan trip: $e';
+      });
+    }
+  }
+
+  void _reset() => setState(() => _itinerary = null);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 900;
+
+            final planner = Padding(
+              padding: const EdgeInsets.all(24),
+              child: TripPlannerPanel(
+                isLoading: _isLoading,
+                error: _error,
+                onSubmit: _handleGenerate,
+              ),
+            );
+
+            if (!isWide) {
+              return SingleChildScrollView(child: planner);
+            }
+
+            final results = Padding(
+              padding: const EdgeInsets.fromLTRB(0, 24, 24, 24),
+              child:
+                  _itinerary == null
+                      ? const EmptyResultsPanel()
+                      : ItineraryPanel(
+                        itinerary: _itinerary!,
+                        origin: _origin,
+                        destination: _destination,
+                        difficulty: _difficulty,
+                        durationDays: _durationDays,
+                        onPlanAnother: _reset,
+                      ),
+            );
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 5, child: SingleChildScrollView(child: planner)),
+                Expanded(flex: 6, child: SingleChildScrollView(child: results)),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared small widgets
+// ---------------------------------------------------------------------------
+
+class BrandRow extends StatelessWidget {
+  const BrandRow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.primaryLight,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.terrain, color: AppColors.amber, size: 20),
+        ),
+        const SizedBox(width: 10),
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'YAM',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Text(
+              'Your Auto Map',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class FieldLabel extends StatelessWidget {
+  final String text;
+  const FieldLabel(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textDark,
+      ),
+    ),
+  );
+}
+
+class MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const MetaChip({super.key, required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: AppColors.textMuted),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class ErrorBanner extends StatelessWidget {
+  final String message;
+  const ErrorBanner({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.errorBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.errorBorder),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: AppColors.errorText,
+          fontSize: 12.5,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class EmptyResultsPanel extends StatelessWidget {
+  const EmptyResultsPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      decoration: panelDecoration(),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.map_outlined,
+            size: 40,
+            color: AppColors.textMuted.withOpacity(0.5),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Your itinerary will appear here',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Fill out the trip brief and generate to see the plan.',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Trip planner panel (left / form screen)
+// ---------------------------------------------------------------------------
+
+class TripPlannerPanel extends StatefulWidget {
+  final bool isLoading;
+  final String? error;
+  final ValueChanged<TripRequest> onSubmit;
+
+  const TripPlannerPanel({
+    super.key,
+    required this.isLoading,
+    required this.error,
+    required this.onSubmit,
+  });
+
+  @override
+  State<TripPlannerPanel> createState() => _TripPlannerPanelState();
+}
+
+class _TripPlannerPanelState extends State<TripPlannerPanel> {
+  final _formKey = GlobalKey<FormState>();
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
-  final _durationController = TextEditingController();
+  final _durationController = TextEditingController(text: '7');
   final _budgetController = TextEditingController();
 
   DateTime? _selectedDate;
   String _trekDifficulty = 'moderate';
-  bool _isLoading = false;
 
   static const List<String> _difficulties = [
     'easy',
@@ -252,18 +531,13 @@ class _TripDashboardState extends State<TripDashboard> {
       initialDate: _selectedDate ?? now.add(const Duration(days: 14)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 730)),
-      builder:
-          (context, child) => Theme(data: Theme.of(context), child: child!),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  Future<void> _planTrip() async {
-    if (_isLoading) return;
+  void _submit() {
+    if (widget.isLoading) return;
     if (!_formKey.currentState!.validate()) return;
-
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a start date.')),
@@ -272,331 +546,433 @@ class _TripDashboardState extends State<TripDashboard> {
     }
 
     FocusScope.of(context).unfocus();
-    setState(() => _isLoading = true);
-
-    final request = TripRequest(
-      origin: _originController.text.trim(),
-      destination: _destinationController.text.trim(),
-      startDate: _formatDate(_selectedDate!),
-      durationDays: int.parse(_durationController.text.trim()),
-      budget: double.parse(_budgetController.text.trim()),
-      trekDifficulty: _trekDifficulty,
+    widget.onSubmit(
+      TripRequest(
+        origin: _originController.text.trim(),
+        destination: _destinationController.text.trim(),
+        startDate: _formatDate(_selectedDate!),
+        durationDays: int.parse(_durationController.text.trim()),
+        budget: double.parse(_budgetController.text.trim()),
+        trekDifficulty: _trekDifficulty,
+      ),
     );
-
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$_apiBaseUrl/generate_itinerary'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(request.toJson()),
-          )
-          .timeout(const Duration(seconds: 90));
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-        final itinerary = TripItinerary.fromJson(decoded);
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ItineraryScreen(itinerary: itinerary),
-          ),
-        );
-      } else {
-        throw Exception(
-          'Server responded with ${response.statusCode}: ${response.body}',
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to plan trip: $e'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: _PlanningLoadingView());
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 560),
+      padding: const EdgeInsets.all(24),
+      decoration: panelDecoration(),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.terrain, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            const Text('YAM', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
+            const BrandRow(),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome, size: 14, color: AppColors.primary),
+                  SizedBox(width: 6),
+                  Text(
+                    'AI-powered route planning',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Build your trip brief',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              "Tell YAM where you want to go. We'll shape a paced, trail-aware "
+              "itinerary with travel logistics, altitude, costs, and essential gear.",
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const FieldLabel('Origin'),
+            TextFormField(
+              controller: _originController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.trip_origin, size: 20),
+                hintText: 'e.g. Delhi',
+              ),
+              validator:
+                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            const FieldLabel('Destination'),
+            TextFormField(
+              controller: _destinationController,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.flag_outlined, size: 20),
+                hintText: 'e.g. Kedarnath, Valley of Flowers',
+              ),
+              validator:
+                  (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Plan Your Ascent',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel('Start date'),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _pickDate,
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.calendar_today, size: 18),
+                          ),
+                          child: Text(
+                            _selectedDate == null
+                                ? 'dd/mm/yyyy'
+                                : _formatDate(_selectedDate!),
+                            style: TextStyle(
+                              color:
+                                  _selectedDate == null
+                                      ? AppColors.textMuted
+                                      : AppColors.textDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Tell us where you\'re headed and we\'ll build the route.',
-                  style: TextStyle(color: Colors.white.withOpacity(0.6)),
-                ),
-                const SizedBox(height: 28),
-                _buildTextField(
-                  controller: _originController,
-                  label: 'Origin',
-                  icon: Icons.trip_origin,
-                  validator:
-                      (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _destinationController,
-                  label: 'Destination',
-                  icon: Icons.flag_outlined,
-                  validator:
-                      (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 16),
-                _buildDateField(),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel('Duration (days)'),
+                      TextFormField(
                         controller: _durationController,
-                        label: 'Duration (days)',
-                        icon: Icons.event_repeat,
                         keyboardType: TextInputType.number,
-                        validator: (v) {
-                          final n = int.tryParse((v ?? '').trim());
-                          if (n == null || n <= 0) return 'Enter valid days';
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _budgetController,
-                        label: 'Budget (USD)',
-                        icon: Icons.attach_money,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.repeat, size: 18),
                         ),
                         validator: (v) {
-                          final n = double.tryParse((v ?? '').trim());
-                          if (n == null || n <= 0) return 'Enter valid budget';
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0) return 'Invalid';
                           return null;
                         },
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildDifficultyDropdown(),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _planTrip,
-                    icon: const Icon(Icons.hiking),
-                    label: const Text('Plan My Trip'),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20),
-      ),
-    );
-  }
-
-  Widget _buildDateField() {
-    final display =
-        _selectedDate == null
-            ? 'Select start date'
-            : _formatDate(_selectedDate!);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: _pickDate,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Start Date',
-          prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
-        ),
-        child: Text(
-          display,
-          style: TextStyle(
-            color:
-                _selectedDate == null
-                    ? Colors.white.withOpacity(0.5)
-                    : Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDifficultyDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _trekDifficulty,
-      decoration: const InputDecoration(
-        labelText: 'Trek Difficulty',
-        prefixIcon: Icon(Icons.landscape_outlined, size: 20),
-      ),
-      dropdownColor: const Color(0xFF171B22),
-      style: const TextStyle(color: Colors.white, fontSize: 16),
-      items:
-          _difficulties
-              .map(
-                (d) => DropdownMenuItem(
-                  value: d,
-                  child: Text(d[0].toUpperCase() + d.substring(1)),
+            const SizedBox(height: 16),
+            const FieldLabel('Budget (₹)'),
+            TextFormField(
+              controller: _budgetController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.currency_rupee, size: 18),
+                hintText: 'e.g. 15000',
+              ),
+              validator: (v) {
+                final n = double.tryParse((v ?? '').trim());
+                if (n == null || n <= 0) return 'Invalid';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            const FieldLabel('Trek difficulty'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children:
+                  _difficulties.map((d) {
+                    final selected = d == _trekDifficulty;
+                    return ChoiceChip(
+                      label: Text(d[0].toUpperCase() + d.substring(1)),
+                      selected: selected,
+                      showCheckmark: false,
+                      onSelected: (_) => setState(() => _trekDifficulty = d),
+                      selectedColor: AppColors.primaryDark,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(
+                        color: selected ? Colors.white : AppColors.textDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                    );
+                  }).toList(),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: widget.isLoading ? null : _submit,
+                icon:
+                    widget.isLoading
+                        ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Icon(Icons.auto_awesome, size: 18),
+                label: Text(
+                  widget.isLoading ? 'Generating...' : 'Generate itinerary',
                 ),
-              )
-              .toList(),
-      onChanged: (value) {
-        if (value != null) setState(() => _trekDifficulty = value);
-      },
+              ),
+            ),
+            if (widget.isLoading) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Mapping your adventure',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Analyzing trails, weather, and gear recommendations.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (widget.error != null) ...[
+              const SizedBox(height: 16),
+              ErrorBanner(message: widget.error!),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Animated loading view
+// Itinerary dashboard panel (right / results screen)
 // ---------------------------------------------------------------------------
 
-class _PlanningLoadingView extends StatefulWidget {
-  const _PlanningLoadingView();
+class ItineraryScreen extends StatelessWidget {
+  final TripItinerary itinerary;
+  final String origin;
+  final String destination;
+  final String difficulty;
+  final int durationDays;
 
-  @override
-  State<_PlanningLoadingView> createState() => _PlanningLoadingViewState();
-}
-
-class _PlanningLoadingViewState extends State<_PlanningLoadingView>
-    with SingleTickerProviderStateMixin {
-  static const List<String> _messages = [
-    'Mapping transit...',
-    'Calculating elevation profiles...',
-    'Checking mountain weather...',
-  ];
-
-  late final AnimationController _pulseController;
-  Timer? _messageTimer;
-  int _messageIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
-
-    _messageTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) {
-      setState(() => _messageIndex = (_messageIndex + 1) % _messages.length);
-    });
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    _messageTimer?.cancel();
-    super.dispose();
-  }
+  const ItineraryScreen({
+    super.key,
+    required this.itinerary,
+    required this.origin,
+    required this.destination,
+    required this.difficulty,
+    required this.durationDays,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: AppColors.bg,
+        elevation: 0,
+        foregroundColor: AppColors.textDark,
+        title: const Text('Itinerary'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ItineraryPanel(
+            itinerary: itinerary,
+            origin: origin,
+            destination: destination,
+            difficulty: difficulty,
+            durationDays: durationDays,
+            onPlanAnother: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-    return Center(
+class ItineraryPanel extends StatelessWidget {
+  final TripItinerary itinerary;
+  final String origin;
+  final String destination;
+  final String difficulty;
+  final int durationDays;
+  final VoidCallback onPlanAnother;
+
+  const ItineraryPanel({
+    super.key,
+    required this.itinerary,
+    required this.origin,
+    required this.destination,
+    required this.difficulty,
+    required this.durationDays,
+    required this.onPlanAnother,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: panelDecoration(),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ScaleTransition(
-            scale: Tween(begin: 0.88, end: 1.12).animate(
-              CurvedAnimation(
-                parent: _pulseController,
-                curve: Curves.easeInOut,
-              ),
-            ),
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accent.withOpacity(0.12),
-                border: Border.all(color: accent.withOpacity(0.4), width: 1.5),
-              ),
-              child: Icon(Icons.terrain, size: 44, color: accent),
-            ),
-          ),
-          const SizedBox(height: 32),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            transitionBuilder:
-                (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween(
-                      begin: const Offset(0, 0.2),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
+          Row(
+            children: [
+              const BrandRow(),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
                 ),
-            child: Text(
-              _messages[_messageIndex],
-              key: ValueKey<int>(_messageIndex),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, size: 8, color: AppColors.primary),
+                    SizedBox(width: 6),
+                    Text(
+                      'Route ready',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            destination.isEmpty ? 'Your itinerary' : destination,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          if (origin.isNotEmpty)
+            Text(
+              'A day-by-day plan from $origin to $destination.',
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
+                color: AppColors.textMuted,
+                fontSize: 13.5,
               ),
             ),
+          const SizedBox(height: 20),
+          _TripEstimateCard(
+            totalCost: itinerary.totalEstimatedCost,
+            origin: origin,
+            destination: destination,
+            difficulty: difficulty,
+            durationDays: durationDays,
+            steps: itinerary.timeline.length,
           ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Text(
+                'Itinerary timeline',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              Text(
+                '${itinerary.timeline.length} steps',
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (itinerary.timeline.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No timeline steps were returned for this trip.',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            )
+          else
+            for (int i = 0; i < itinerary.timeline.length; i++)
+              _TimelineCard(
+                step: itinerary.timeline[i],
+                index: i + 1,
+                isLast: i == itinerary.timeline.length - 1,
+              ),
           const SizedBox(height: 8),
-          Text(
-            'This can take up to a minute.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.45),
-              fontSize: 13,
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onPlanAnother,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Plan another trip'),
             ),
           ),
         ],
@@ -605,104 +981,71 @@ class _PlanningLoadingViewState extends State<_PlanningLoadingView>
   }
 }
 
-// ---------------------------------------------------------------------------
-// Itinerary result screen
-// ---------------------------------------------------------------------------
-
-class ItineraryScreen extends StatelessWidget {
-  final TripItinerary itinerary;
-
-  const ItineraryScreen({super.key, required this.itinerary});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Your Itinerary')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-          children: [
-            _TotalCostBanner(totalCost: itinerary.totalEstimatedCost),
-            const SizedBox(height: 28),
-            Text(
-              'Day-by-Day Timeline',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            if (itinerary.timeline.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  'No timeline steps were returned.',
-                  style: TextStyle(color: Colors.white.withOpacity(0.6)),
-                ),
-              )
-            else
-              for (int i = 0; i < itinerary.timeline.length; i++)
-                _TimelineTile(
-                  step: itinerary.timeline[i],
-                  isLast: i == itinerary.timeline.length - 1,
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TotalCostBanner extends StatelessWidget {
+class _TripEstimateCard extends StatelessWidget {
   final double totalCost;
+  final String origin;
+  final String destination;
+  final String difficulty;
+  final int durationDays;
+  final int steps;
 
-  const _TotalCostBanner({required this.totalCost});
+  const _TripEstimateCard({
+    required this.totalCost,
+    required this.origin,
+    required this.destination,
+    required this.difficulty,
+    required this.durationDays,
+    required this.steps,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         gradient: const LinearGradient(
-          colors: [Color(0xFFFF9F45), Color(0xFFFF6F3C)],
+          colors: [AppColors.primaryDark, AppColors.primary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -8,
-            top: -8,
-            child: Icon(
-              Icons.account_balance_wallet,
-              size: 72,
-              color: Colors.black.withOpacity(0.12),
+          const Text(
+            'TOTAL PROJECTED COST',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 6),
+          Text(
+            '\₹${totalCost.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 24,
+            runSpacing: 12,
             children: [
-              const Text(
-                'TOTAL ESTIMATED COST',
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  fontSize: 12,
-                ),
+              _MetaStat(label: 'Duration', value: '$durationDays days'),
+              _MetaStat(label: 'Route', value: '$origin \u2192 $destination'),
+              _MetaStat(
+                label: 'Difficulty',
+                value:
+                    difficulty.isEmpty
+                        ? '-'
+                        : difficulty[0].toUpperCase() + difficulty.substring(1),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '\$${totalCost.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 34,
-                ),
-              ),
+              _MetaStat(label: 'Steps', value: '$steps'),
             ],
           ),
         ],
@@ -711,11 +1054,49 @@ class _TotalCostBanner extends StatelessWidget {
   }
 }
 
-class _TimelineTile extends StatelessWidget {
+class _MetaStat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _MetaStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white60,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimelineCard extends StatelessWidget {
   final TimelineStep step;
+  final int index;
   final bool isLast;
 
-  const _TimelineTile({required this.step, required this.isLast});
+  const _TimelineCard({
+    required this.step,
+    required this.index,
+    required this.isLast,
+  });
 
   IconData _transportIcon(String? mode) {
     final m = (mode ?? '').toLowerCase();
@@ -734,30 +1115,27 @@ class _TimelineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Rail: day marker + connecting line
           Column(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 30,
+                height: 30,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
                   shape: BoxShape.circle,
-                  color: accent.withOpacity(0.15),
-                  border: Border.all(color: accent, width: 1.5),
+                  border: Border.all(color: AppColors.primary, width: 1.2),
                 ),
                 child: Text(
-                  '${step.dayNumber}',
-                  style: TextStyle(
-                    color: accent,
+                  '$index',
+                  style: const TextStyle(
+                    color: AppColors.primary,
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    fontSize: 12,
                   ),
                 ),
               ),
@@ -766,127 +1144,102 @@ class _TimelineTile extends StatelessWidget {
                   child: Container(
                     width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: Colors.white.withOpacity(0.12),
+                    color: AppColors.border,
                   ),
                 ),
             ],
           ),
-          const SizedBox(width: 14),
-          // Card content
+          const SizedBox(width: 12),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'DAY ${step.dayNumber} • ${step.time}',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.55),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.6,
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'DAY ${step.dayNumber} \u2022 ${step.time}',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        if (step.cost != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '\₹${step.cost!.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.5,
+                              ),
                             ),
                           ),
-                          if (step.cost != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: accent.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                '\$${step.cost!.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: accent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      step.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      step.description,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (step.altitudeGain != null ||
+                        step.transportMode != null) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 6,
+                        children: [
+                          if (step.altitudeGain != null)
+                            MetaChip(
+                              icon: Icons.terrain,
+                              label: step.altitudeGain!,
+                            ),
+                          if (step.transportMode != null)
+                            MetaChip(
+                              icon: _transportIcon(step.transportMode),
+                              label: step.transportMode!,
                             ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        step.title,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        step.description,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
-                          fontSize: 14,
-                          height: 1.4,
-                        ),
-                      ),
-                      if (step.altitudeGain != null ||
-                          step.transportMode != null) ...[
-                        const SizedBox(height: 14),
-                        Divider(
-                          color: Colors.white.withOpacity(0.08),
-                          height: 1,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 20,
-                          runSpacing: 8,
-                          children: [
-                            if (step.altitudeGain != null)
-                              _MetaChip(
-                                icon: Icons.terrain,
-                                label: step.altitudeGain!,
-                              ),
-                            if (step.transportMode != null)
-                              _MetaChip(
-                                icon: _transportIcon(step.transportMode),
-                                label: step.transportMode!,
-                              ),
-                          ],
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _MetaChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: Colors.white.withOpacity(0.6)),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 13),
-        ),
-      ],
     );
   }
 }
