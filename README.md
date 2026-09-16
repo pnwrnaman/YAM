@@ -57,4 +57,4 @@ pip install fastapi uvicorn pydantic langchain langchain-nvidia-ai-endpoints
 export NVIDIA_API_KEY="your_nvidia_api_key_here"
 
 # Run the FastAPI server
-uvicorn main:app --reload --port 8000<img width="1710" height="1112" alt="Screenshot 2026-09-16 at 1 33 44 PM" src="https://github.com/user-attachments/assets/457ba823-a08d-4402-9655-785bfa69b239" />
+uvicorn main:app --reload --port 8000<img width="1710" height="1112"  
