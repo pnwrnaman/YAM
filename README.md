@@ -42,6 +42,8 @@ Follow these instructions to get a copy of the project up and running on your lo
 * [Python 3.10+](https://www.python.org/downloads/) installed.
 * An NVIDIA API Key.
 
+  [This is the drive address for the video and ppt](https://drive.google.com/drive/folders/1Mv8spaxcqPsAJUbRegLL_JGolGCnHn7H?usp=sharing)
+
 ### 1. Backend Setup (FastAPI + LangChain)
 
 Navigate to your backend directory (if separated) or project root:
